@@ -56,255 +56,201 @@ def monoGen (A : Set (Set Ω)) : Set (Set Ω) :=
   ⋂₀ {M | IsMonotoneClass M ∧ A ⊆ M}
 -- END FROZEN DEFINITIONS
 
-/-!Th 3.2（Dynkin π-λ 定理）：P 是 π-系统，L 是 λ-系统，P ⊆ L ⇒ σ(P) ⊆ L。
-令 L₀ = λ(P)。
-
-* A1 `lambdaGen_isLambdaSys`：λ(A) 是 λ-系统。
-* A2 `subset_lambdaGen`：A ⊆ λ(A)。
-* A3 `lambdaGen_inter`：Th 3.2 证明 ②。
-  It remains to show L₀ 是 π-系统。L_A = {B | A ∩ B ∈ L₀}，路线 P × P → P × L₀ → L₀ × L₀。
-  辅助：
-  - 最小性 `lambdaGen_subset`；
-  - Remark：λ₁ + λ₂ + λ₃ ⇔ λ₁ + λ₂′ + λ₃（λ₂′：A ⊆ B ⇒ B \ A ∈ L）；
-  - Claim `isLambdaSys_good`：L_A 是 λ-系统。
-* A4 `isSigmaField_of_lambda_pi`：Lemma 6：λ-系统 + π-系统 ⇒ σ-域。
-  用 Mathlib 的 `disjointed`（Bₙ = Aₙ \ (A₀ ∪ ⋯ ∪ Aₙ₋₁)）不交化。
-* A5 `pi_lambda`：主定理（Th 3.2 证明 ①）。
-  L₀ 是 π-系统已由 A3 证明，所以由 Lemma 6（A4），L₀ 是 σ-域，于是 P ⊆ σ(P) ⊆ L₀ ⊆ L。
-
-（笔记里先写证明 ①（假设 L₀ 是 π-系统），再写证明 ②。现在代码按题目顺序，
-A3（证明 ②）在 A5 之前，所以 A5 可以直接使用 A3，不再需要「假设」。）
--/
-
-/-! ## A1：λ(A) 是 λ-系统 -/
-
-/-- L₀ = λ(P) 是 λ-系统：它是所有包含 P 的 λ-系统的交，三条性质在每一个里都成立。
---λ(A) 的定义是 ⋂₀ {L | L 是 λ-系统 且 A ⊆ L}
-`mem_sInter : x ∈ ⋂₀ S ↔ ∀ t ∈ S, x ∈ t`；`hL.1`：L 是 λ-系统；`hL.2`：A ⊆ L。 -/
+--1st Lemma
+-- Want to show what everything in lambdaGen A satisfies univ_mem, compl_mem and iUonion_mem
 lemma lambdaGen_isLambdaSys (A : Set (Set Ω)) : IsLambdaSys (lambdaGen A) := by
-  refine ⟨?_, ?_, ?_⟩
-  · -- (λ₁)
-    exact mem_sInter.2 fun L hL => hL.1.univ_mem  --只需证对每个 L，Ω ∈ L
-  · -- (λ₂)
-    intro B hB
-    exact mem_sInter.2 fun L hL => hL.1.compl_mem B ((mem_sInter.1 hB) L hL)
-  · -- (λ₃)
-    intro f hd hf
-    exact mem_sInter.2 fun L hL =>
-      hL.1.iUnion_mem f hd (fun n => mem_sInter.1 (hf n) L hL)
+  unfold lambdaGen-- Replace lambdaGen A by the definition
+  refine ⟨?_, ?_, ?_⟩ -- Break the proof into 3 parts
+  · -- Goal: univ ∈ ⋂₀ {L | IsLambdaSys L ∧ A ⊆ L}
+    -- Being in an intersection means being in every L of the family
+    rw [Set.mem_sInter]
+    -- So take any such L; hL says "L is a λ-system and A ⊆ L"
+    intro L hL -- Introduct a new hypothesis
+    -- Every λ-system contains Ω
+    exact hL.1.univ_mem
 
-/-! ## A2：A ⊆ λ(A) -/
+  · intro s hs
+    rw [Set.mem_sInter]
+    intro L hL
+    --use the compl_mem to show this is true for s and things in the parentheses shows s is in every L
+    exact hL.1.compl_mem s (Set.mem_sInter.mp hs L hL)
 
-/-- P ⊆ L₀：P 包含在每个包含 P 的 λ-系统里。 -/
+  · intro f dj hf
+    apply Set.mem_sInter.mpr
+    intro L hLA
+    --The parentheses contain a function that supplies a proof for each index i
+    exact hLA.1.iUnion_mem f dj (fun i => Set.mem_sInter.mp (hf i) L hLA)
+
+--2nd Lemma
 lemma subset_lambdaGen (A : Set (Set Ω)) : A ⊆ lambdaGen A := by
-  intro B hB
-  exact mem_sInter.2 fun L hL => hL.2 hB 
+  unfold lambdaGen
+  intro s hs
+  -- Same as saying if we can prove this, we can prove the goal
+  apply Set.mem_sInter.mpr
+  intro L hLA
+  exact hLA.2 hs
 
-/-! ## A3：λ(P) 对交封闭（Th 3.2 证明 ②） -/
+--3rd Lemma
+/-- ∅ = univᶜ is in every λ-system. -/
+lemma IsLambdaSys.empty_mem {L : Set (Set Ω)} (hL : IsLambdaSys L) : ∅ ∈ L := by
+  have h := hL.compl_mem univ hL.univ_mem
+  rwa [compl_univ] at h -- rewrite the assumption
 
-/-! ### A3 的辅助 1：最小性 -/
-
-/-- 【辅助】最小性（"smallest λ-system"）：L 是 λ-系统且 A ⊆ L ⇒ λ(A) ⊆ L。（任何包含A的λ-system） -/
-lemma lambdaGen_subset {A L : Set (Set Ω)} (hL : IsLambdaSys L) (hA : A ⊆ L) :
-    lambdaGen A ⊆ L :=
-  sInter_subset_of_mem ⟨hL, hA⟩
-
--- sInter_subset_of_mem ：如果 t 是集族 𝒮 中的一员，那么 ⋂₀ 𝒮 ⊆ t 
--- 这里 𝒮 = {L | L 是 λ-系统 且 A ⊆ L}，⋂₀ 𝒮 = λ(A)，t = L。 
-
-/-! ### A3 的辅助 2：Remark：λ₁ + λ₂ + λ₃ ⇔ λ₁ + λ₂′ + λ₃ -/
-
-
-/-- 【辅助】∅ ∈ L：∅ = Ωᶜ，用 λ₁、λ₂。 -/
-lemma IsLambdaSys.empty_mem {L : Set (Set Ω)} (hL : IsLambdaSys L) :
-    (∅ : Set Ω) ∈ L := by
-  simpa using hL.compl_mem univ hL.univ_mem
-
-/-- 【辅助】两个不交集合的并（证明 ① 里「Bᶜ ∪ A ∈ L by λ₃」这一步）。
-λ₃ 只讲可数并，所以把序列补成 A, B, ∅, ∅, …。 -/
-lemma IsLambdaSys.union_mem {L : Set (Set Ω)} (hL : IsLambdaSys L) {A B : Set Ω}
-    (hA : A ∈ L) (hB : B ∈ L) (hAB : Disjoint A B) : A ∪ B ∈ L := by
-  let f : ℕ → Set Ω := fun n => if n = 0 then A else if n = 1 then B else ∅
-  have hU : (⋃ n, f n) = A ∪ B := by
-    ext x --把证明两个集合相等变成证明他们的元素相等，相等也就是iff所以下面分成两个方向来解释
-    simp only [mem_iUnion, mem_union, f] --改写之后 hn 即 x ∈ f(n)
-    constructor --把↔拆成两个方向
-    · rintro ⟨n, hn⟩ -- ⇒ 方向，把已知拿进来拆开 尖括号 ⟨ , ⟩：用逗号隔开，拆出的东西同时成立。一种情况，多样东西。
-      split_ifs at hn --按if条件分情况 因为x在union n fn中那么也就意味着存在某个n使得x在其中一个集合中，所以分情况罗列
-      · exact Or.inl hn          -- n = 0 （Or.inl 证明或） 此时意味着 x在A ∪ B中左边的那个集合exact后面是证据
-      · exact Or.inr hn          -- n = 1 （Or.inr 证明或） 此时意味着 x在A ∪ B中右边的那个集合
-      · simp at hn               -- n ≥ 2：x ∈ ∅，矛盾 （化简hn，hn变成false，因为x不可能属于空集）
-    · rintro (hxA | hxB) -- ⇐ 方向 有两种情况 A？B？ 圆括号 ( | )：用竖线隔开，拆出的是不同的可能。多种情况，每种一样东西。
-      · exact ⟨0, by simpa using hxA⟩ --x ∈ A
-      · exact ⟨1, by simpa using hxB⟩ --x ∈ B
-  rw [← hU] --rw [← hU]：从右往左用，把 A ∪ B 换成 ⋃ f(n)
-  refine hL.iUnion_mem f ?_ ?_ --两个条件f两两不交，f每一项都在L里面
-  · -- 两两不交：i、j 各取 0 / 1 / 其他，共 9 种情况
+--4th Lemma
+/-- Disjoint union of two sets, using the sequence X, Y, ∅, ∅, ... -/
+lemma IsLambdaSys.union_mem {L : Set (Set Ω)} (hL : IsLambdaSys L) {X Y : Set Ω}
+    (hX : X ∈ L) (hY : Y ∈ L) (hXY : Disjoint X Y) : X ∪ Y ∈ L := by
+  let f : ℕ → Set Ω := fun n => if n = 0 then X else if n = 1 then Y else ∅
+  -- the union of the sequence is X ∪ Y
+  have hU : (⋃ n, f n) = X ∪ Y := by
+    ext x
+    simp only [mem_iUnion, mem_union]
+    constructor
+    · rintro ⟨n, hn⟩
+      simp only [f] at hn
+      split_ifs at hn
+      · exact Or.inl hn
+      · exact Or.inr hn
+      · simp at hn
+    · rintro (hx | hx)
+      · exact ⟨0, by simp [f, hx]⟩
+      · exact ⟨1, by simp [f, hx]⟩
+  rw [← hU]
+  apply hL.iUnion_mem f
+  · -- pairwise disjoint: check every case of i and j
     intro i j hij
-    show Disjoint (f i) (f j) --即要证明 fi fj不交
+    simp only [Function.onFun, f]
+    split_ifs <;> first
+      | exact absurd (by omega : i = j) hij
+      | exact hXY
+      | exact hXY.symm
+      | simp
+  · -- every term is in L
+    intro n
     simp only [f]
     split_ifs
-    · omega                         -- (0,0)：与 i ≠ j 矛盾  omega 专门处理自然数（和整数）之间的等式、不等式
-    · exact hAB                     -- (0,1)
-    · exact disjoint_bot_right      -- (0,≥2) disjoint_bot_right是引理，任何集合都和空集不交
-    · exact hAB.symm                -- (1,0) 把AB位置对调
-    · omega                         -- (1,1)：矛盾
-    · exact disjoint_bot_right      -- (1,≥2)
-    · exact disjoint_bot_left       -- (≥2,0)
-    · exact disjoint_bot_left       -- (≥2,1)
-    · exact disjoint_bot_left       -- (≥2,≥2)
-  · intro n --下面说明每一项都在L里面
-    simp only [f]
-    split_ifs
-    · exact hA  --前面假设hA
-    · exact hB
+    · exact hX
+    · exact hY
     · exact hL.empty_mem
 
-/-- 证明 ①（λ₁+λ₂+λ₃ ⇒ λ₂′）：A, B ∈ L，A ⊆ B ⇒ B \ A ∈ L。
-B \ A = B ∩ Aᶜ = (Bᶜ ∪ A)ᶜ（De Morgan）。
-Bᶜ ∈ L（λ₂），Bᶜ 与 A 不交（因为 A ⊆ B），所以 Bᶜ ∪ A ∈ L（λ₃），再取补（λ₂）。 -/
-
-  --任何λ-system都满足λ₂′
-lemma IsLambdaSys.diff_mem {L : Set (Set Ω)} (hL : IsLambdaSys L) {A B : Set Ω}
-    (hA : A ∈ L) (hB : B ∈ L) (hAB : A ⊆ B) : B \ A ∈ L := by
-  have h : B \ A = (Bᶜ ∪ A)ᶜ := by
+--5th Lemma
+/-- Proper difference: Y ⊆ X, both in L ⟹ X \ Y ∈ L. -/
+lemma IsLambdaSys.diff_mem {L : Set (Set Ω)} (hL : IsLambdaSys L) {X Y : Set Ω}
+    (hX : X ∈ L) (hY : Y ∈ L) (hYX : Y ⊆ X) : X \ Y ∈ L := by
+  -- X \ Y = (Xᶜ ∪ Y)ᶜ
+  have h : X \ Y = (Xᶜ ∪ Y)ᶜ := by
     ext x
-    simp --把这个B \ A = (Bᶜ ∪ A)ᶜ化简成这个x ∈ B \ A ↔ x ∈ (Bᶜ ∪ A)ᶜ
+    simp only [mem_sdiff, mem_compl_iff, mem_union]
+    tauto
   rw [h]
-  -- `disjoint_compl_left : Disjoint Bᶜ B`；A ⊆ B 缩小右边得 Disjoint Bᶜ A
+  apply hL.compl_mem
+  apply hL.union_mem (hL.compl_mem X hX) hY
+  -- Xᶜ and Y are disjoint because Y ⊆ X  -- Xᶜ and Y are disjoint because Y ⊆ X
+  unfold Disjoint
+  intro Z hZX hZY x hx
+  -- x ∈ Z gives x ∈ Y ⊆ X, but also x ∈ Xᶜ: contradiction
+  exact absurd (hYX (hZY hx)) (hZX hx)
 
-  have h1 : Bᶜ ∈ L := hL.compl_mem B hB
-  have h2 : Disjoint Bᶜ A := disjoint_compl_left.mono_right hAB
-  have h3 : Bᶜ ∪ A ∈ L := hL.union_mem h1 hA h2
-  exact hL.compl_mem _ h3  --后面跟对象 然后跟对象属于L
-  --B ∈ L ⇒ Bᶜ ∈ L（λ₂），A ∈ L，所以 Bᶜ ∪ A ∈ L（λ₃，不交），所以 (Bᶜ ∪ A)ᶜ ∈ L（λ₂）
-
-/-- 证明 ②（λ₁+λ₂′+λ₃ ⇒ λ₁+λ₂+λ₃）：取 B = Ω，Ω \ A = Aᶜ ∈ L。 即说明complement还在L就可以了-/
-lemma isLambdaSys_of_diff {L : Set (Set Ω)} (h1 : univ ∈ L)
-    (h2' : ∀ A ∈ L, ∀ B ∈ L, A ⊆ B → B \ A ∈ L)
-    (h3 : ∀ f : ℕ → Set Ω, Pairwise (Disjoint on f) → (∀ n, f n ∈ L) →
-      (⋃ n, f n) ∈ L) : IsLambdaSys L := by
-  refine ⟨h1, ?_, h3⟩
-  intro A hA
-  have h : Aᶜ = univ \ A := by
-    ext x
-    simp
-  rw [h]
-  exact h2' A hA univ h1 (subset_univ A) --一一对应h2‘的条件
-
-/-! ### A3 的辅助 3：Claim：L_A 是 λ-系统 -/
-
-
-/-- Claim：L 是 λ-系统且 A ∈ L 时，L_A = {B | A ∩ B ∈ L} 是 λ-系统。
-验证 λ₁、λ₂′、λ₃，再用 Remark 的证明 ②：
-* (λ₁) A ∩ Ω = A ∈ L；
-* (λ₂′) B₁ ⊆ B₂：A ∩ (B₂ \ B₁) = (A ∩ B₂) \ (A ∩ B₁)，A ∩ B₁ ⊆ A ∩ B₂，用 L 的 λ₂′；
-* (λ₃) A ∩ (⋃ Bₙ) = ⋃ (A ∩ Bₙ)，A ∩ Bₙ 仍两两不交，用 L 的 λ₃。 -/
-lemma isLambdaSys_good {L : Set (Set Ω)} (hL : IsLambdaSys L) {A : Set Ω}
-    (hA : A ∈ L) : IsLambdaSys {B | A ∩ B ∈ L} := by
-  apply isLambdaSys_of_diff
-  · -- (λ₁)
-    show A ∩ univ ∈ L
-    simpa using hA
-  · -- (λ₂′)
-    intro B₁ hB₁ B₂ hB₂ h12
-    show A ∩ (B₂ \ B₁) ∈ L
-    have h : A ∩ (B₂ \ B₁) = (A ∩ B₂) \ (A ∩ B₁) := by
+--6th Lemma
+/-- Key fact: if C ∈ L, then {B | C ∩ B ∈ L} is a λ-system. -/
+lemma isLambdaSys_inter_slice {L : Set (Set Ω)} (hL : IsLambdaSys L) {C : Set Ω}
+    (hC : C ∈ L) : IsLambdaSys {B | C ∩ B ∈ L} := by
+  refine ⟨?_, ?_, ?_⟩
+  · -- C ∩ Ω = C
+    show C ∩ univ ∈ L
+    rw [inter_univ]
+    exact hC
+  · -- C ∩ Bᶜ = C \ (C ∩ B), a proper difference
+    intro B hB
+    show C ∩ Bᶜ ∈ L
+    have h : C ∩ Bᶜ = C \ (C ∩ B) := by
       ext x
-      constructor
-      · rintro ⟨hxA, hx2, hx1⟩
-        exact ⟨⟨hxA, hx2⟩, fun h => hx1 h.2⟩
-      · rintro ⟨⟨hxA, hx2⟩, hx⟩
-        exact ⟨hxA, hx2, fun h1 => hx ⟨hxA, h1⟩⟩
+      simp only [mem_inter_iff, mem_compl_iff, mem_sdiff]
+      tauto
     rw [h]
-    exact hL.diff_mem hB₁ hB₂ (inter_subset_inter_right A h12)
-  · -- (λ₃)
-    intro f hf hfL
-    show A ∩ ⋃ n, f n ∈ L
-    rw [inter_iUnion]                 -- A ∩ (⋃ Bₙ) = ⋃ (A ∩ Bₙ)
-    refine hL.iUnion_mem _ ?_ hfL
-    intro i j hij
-    show Disjoint (A ∩ f i) (A ∩ f j)
-    exact Disjoint.mono inter_subset_right inter_subset_right (hf hij)
+    exact hL.diff_mem hC hB inter_subset_left
+  · -- C ∩ ⋃ fₙ = ⋃ (C ∩ fₙ), still disjoint
+    intro f hdisj hf
+    show C ∩ ⋃ n, f n ∈ L
+    rw [inter_iUnion]
+    apply hL.iUnion_mem (fun n => C ∩ f n)
+    · intro i j hij
+      exact Disjoint.mono inter_subset_right inter_subset_right (hdisj hij)
+    · intro n
+      exact hf n
 
-/-! ### A3 本身 -/
+--7th Lemma
+/-- Minimality: lambdaGen A is inside every λ-system containing A. -/
+lemma lambdaGen_subset {A L : Set (Set Ω)} (hL : IsLambdaSys L) (hAL : A ⊆ L) :
+    lambdaGen A ⊆ L := by
+  intro s hs
+  unfold lambdaGen at hs
+  exact Set.mem_sInter.mp hs L ⟨hL, hAL⟩
 
-
-/-- L₀ 对交封闭。路线 P × P → P × L₀ → L₀ × L₀：
-* 第一轮：A ∈ P 固定。B ∈ P ⇒ A ∩ B ∈ P ⊆ L₀，即 P ⊆ L_A；
-  L_A 是 λ-系统（Claim），最小性 ⇒ L₀ ⊆ L_A。
-* 第二轮：B ∈ L₀ 固定。对 A ∈ P，由第一轮 A ∩ B ∈ L₀，所以 P ⊆ L_B；
-  最小性 ⇒ L₀ ⊆ L_B，即 B, C ∈ L₀ ⇒ B ∩ C ∈ L₀。 -/
+--8th Lemma
+--LambdaGen P is closed under interesction
 lemma lambdaGen_inter (P : Set (Set Ω)) (hP : IsPiSys P) :
     ∀ A ∈ lambdaGen P, ∀ B ∈ lambdaGen P, A ∩ B ∈ lambdaGen P := by
-  have hL₀ := lambdaGen_isLambdaSys P
-  -- 第一轮：P × P → P × L₀
-  have round1 : ∀ A ∈ P, ∀ B ∈ lambdaGen P, A ∩ B ∈ lambdaGen P := by
+  have hLG := lambdaGen_isLambdaSys P
+  -- Step 1: A ∈ P, B ∈ lambdaGen P
+  have step1 : ∀ A ∈ P, ∀ B ∈ lambdaGen P, A ∩ B ∈ lambdaGen P := by
     intro A hA
-    exact lambdaGen_subset (isLambdaSys_good hL₀ (subset_lambdaGen P hA))
-      fun B hB => subset_lambdaGen P (hP A hA B hB)
-  -- 第二轮：P × L₀ → L₀ × L₀（固定 B ∈ L₀，考虑 L_B）
-  intro B hB C hC
-  have hPB : P ⊆ {D | B ∩ D ∈ lambdaGen P} := by
-    intro A hA
-    show B ∩ A ∈ lambdaGen P
-    rw [inter_comm]                   -- B ∩ A = A ∩ B
-    exact round1 A hA B hB
-  exact lambdaGen_subset (isLambdaSys_good hL₀ hB) hPB hC
+    have hsub : lambdaGen P ⊆ {B | A ∩ B ∈ lambdaGen P} := by
+      apply lambdaGen_subset (isLambdaSys_inter_slice hLG (subset_lambdaGen P hA))
+      -- P ⊆ the slice, because P is a π-system
+      intro B hB
+      exact subset_lambdaGen P (hP A hA B hB)
+    intro B hB
+    exact hsub hB
+  -- Step 2: A ∈ lambdaGen P, B ∈ lambdaGen P
+  intro A hA
+  have hsub : lambdaGen P ⊆ {B | A ∩ B ∈ lambdaGen P} := by
+    apply lambdaGen_subset (isLambdaSys_inter_slice hLG hA)
+    -- P ⊆ the slice, by step 1 with the order of ∩ swapped
+    intro B hB
+    show A ∩ B ∈ lambdaGen P
+    rw [inter_comm]
+    exact step1 B hB A hA
+  intro B hB
+  exact hsub hB
 
-/-! ## A4：λ-系统 + 对交封闭 ⇒ σ-域（Lemma 6） -/
---大纲1.σ-域的前两条直接用 λ₁、λ₂，只剩可数并。
---2.任取 A₀, A₁, … ∈ F，令 Bₙ = disjointed f n = Aₙ \ (A₀ ∪ ⋯ ∪ Aₙ₋₁)。
---3.⋃ Bₙ = ⋃ Aₙ。（iUnion_disjointed）
---4.Bₙ 两两不交。（disjoint_disjointed）
---5.每个 Bₙ ∈ F：从 Aₙ 出发一次减去一项，t \ Aᵢ = t ∩ Aᵢᶜ，用补集（λ₂）和交（π）。（disjointedRec）
---6.由 λ₃，⋃ Bₙ ∈ F，所以 ⋃ Aₙ ∈ F。
-
-
-/-- Lemma 6：既是 π-system 又是 λ-system 的类是 σ-field。
-用 Mathlib 的 `disjointed`：disjointed f n = Aₙ \ (A₀ ∪ ⋯ ∪ Aₙ₋₁)，
-也就是笔记里的 Bₙ = Aₙ ∩ Aₙ₋₁ᶜ ∩ ⋯ ∩ A₀ᶜ。
-* Bₙ 两两不交：`disjoint_disjointed`；
-* ⋃ Bₙ = ⋃ Aₙ：`iUnion_disjointed`；
-* Bₙ ∈ L：`disjointedRec`，每一步只是「减去一项」，t \ Aᵢ = t ∩ Aᵢᶜ（λ₂ + π）。 -/
+--9th Lemma
 lemma isSigmaField_of_lambda_pi (L : Set (Set Ω)) (hL : IsLambdaSys L)
     (hπ : ∀ A ∈ L, ∀ B ∈ L, A ∩ B ∈ L) : IsSigmaField L := by
-  -- σ-域的前两条直接来自 λ₁、λ₂，只剩可数并
-  refine ⟨hL.univ_mem, hL.compl_mem, fun f hf => ?_⟩
-  -- ⋃ Aₙ 换成 ⋃ Bₙ（Bₙ = disjointed f n）
-  rw [← iUnion_disjointed]
-  -- Bₙ 两两不交，用 λ₃；剩下要证每个 Bₙ ∈ L
-  refine hL.iUnion_mem _ (disjoint_disjointed f) fun n => ?_
-  -- Bₙ 是从 Aₙ 出发，一次减去一项得到的；每次减去一项都留在 L 里
-  refine disjointedRec (p := fun t => t ∈ L) (fun t i ht => ?_) (hf n)
-  -- t \ Aᵢ = t ∩ Aᵢᶜ：Aᵢᶜ ∈ L（λ₂），交集 ∈ L（π）
-  have h : t \ f i = t ∩ (f i)ᶜ := by
-    ext x
-    simp
-  rw [h]
-  exact hπ _ ht _ (hL.compl_mem _ (hf i))
+  refine ⟨?_, ?_, ?_⟩ -- Break the proof into 3 parts
+  · exact hL.univ_mem
 
-/-! ## A5：主定理（Th 3.2） -/
+  · exact hL.compl_mem
 
-/-- Th 3.2（Dynkin π-λ 定理）：P 是 π-系统，L 是 λ-系统，P ⊆ L ⇒ σ(P) ⊆ L。
-L₀ = λ(P) 是 π-系统已经在 A3 证明了，这里直接使用：
-* 由 A1，L₀ 是 λ-系统；由 A3，L₀ 对交封闭；由 Lemma 6（A4），L₀ 是 σ-域；
-* σ(P) 是包含 P 的最小 σ-域，而 L₀ 是包含 P 的 σ-域（A2），所以 σ(P) ⊆ L₀；
-* L₀ 是包含 P 的最小 λ-系统，L 是包含 P 的 λ-系统，所以 L₀ ⊆ L。
-即 P ⊆ σ(P) ⊆ L₀ ⊆ L。 -/
+  · intro f hf
+    -- ⋃ f equals the union of its disjointed version
+    rw [← iUnion_disjointed]
+    -- λ-systems contain disjoint unions; disjointed f is pairwise disjoint
+    apply hL.iUnion_mem (disjointed f) (disjoint_disjointed f)
+    -- still to show: each piece disjointed f n is in L
+    intro n
+    -- disjointed f n is f n with earlier f i's removed one at a time,
+    -- so it is enough that L survives "t ↦ t \ f i"
+    -- Prove recursivly
+    refine disjointedRec (p := (· ∈ L)) ?_ (hf n)
+    intro t i ht
+    -- t \ f i = t ∩ (f i)ᶜ, which is in L by hπ and compl_mem
+    rw [sdiff_eq]
+    exact hπ t ht (f i)ᶜ (hL.compl_mem (f i) (hf i))
+
+
 theorem pi_lambda (P L : Set (Set Ω)) (hP : IsPiSys P) (hL : IsLambdaSys L)
     (hPL : P ⊆ L) : sigmaGen P ⊆ L := by
-  -- L₀ 对交封闭（A3，Th 3.2 证明 ②）
-  have hπ₀ : ∀ A ∈ lambdaGen P, ∀ B ∈ lambdaGen P, A ∩ B ∈ lambdaGen P :=
-    lambdaGen_inter P hP
-  -- L₀ 是 σ-域（A1 + A3 + A4）
+  -- Step 1: lambdaGen P is a σ-field
   have hσ : IsSigmaField (lambdaGen P) :=
-    isSigmaField_of_lambda_pi _ (lambdaGen_isLambdaSys P) hπ₀
-  -- σ(P) ⊆ L₀：sigmaGen 也是 ⋂₀，L₀ 是其中一员
-  have h1 : sigmaGen P ⊆ lambdaGen P :=
-    sInter_subset_of_mem ⟨hσ, subset_lambdaGen P⟩
-  -- L₀ ⊆ L：最小性
-  exact h1.trans (lambdaGen_subset hL hPL)
+    isSigmaField_of_lambda_pi (lambdaGen P) (lambdaGen_isLambdaSys P) (lambdaGen_inter P hP)
+  intro s hs
+  -- Step 2: s is in every σ-field containing P, in particular in lambdaGen P
+  unfold sigmaGen at hs
+  have hsLG : s ∈ lambdaGen P :=
+    Set.mem_sInter.mp hs (lambdaGen P) ⟨hσ, subset_lambdaGen P⟩
+  -- Step 3: lambdaGen P ⊆ L, since L is a λ-system containing P
+  exact lambdaGen_subset hL hPL hsLG
 
 end Math7800.Midterm
 
