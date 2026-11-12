@@ -22,27 +22,7 @@ Textbook: Patrick Billingsley, Probability and Measure, 3rd Edition
 
 Tools: Lean 4, Mathlib, Lake, VS Code, LaTeX
 
-Topics Covered
-
-The course explores the mathematical foundations of probability, including:
-
-Probability spaces and probability measures
-
-Fields and σ-fields of sets
-
-π-systems and λ-systems
-
-The π–λ theorem
-
-Monotone classes and the monotone class theorem
-
-Outer measures and measure extensions
-
-Countable additivity and continuity of probability measures
-
-Limit superior and limit inferior of events
-
-Lean 4 Formalization Projects
+Midterm
 
 Project A: The π–λ Theorem
 
